@@ -11,7 +11,13 @@ A **pure-Python reimplementation of MARVEL** for single-cell alternative splicin
 
 ## Install
 
-From this repository:
+Install the released package from PyPI:
+
+```bash
+pip install marvel-python
+```
+
+For local development from this repository:
 
 ```bash
 pip install -e .
