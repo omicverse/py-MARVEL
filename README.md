@@ -116,6 +116,59 @@ Both AnnData function calls and low-level object helpers (`MarvelPlate`, `Marvel
 
 ---
 
+## AnnData-native vs Original MARVEL-style API
+
+py-MARVEL supports two equivalent execution styles. The AnnData-native style is the recommended interface for new Python workflows; the original MARVEL-style object API is kept for R MARVEL parity, tests, and users migrating existing MARVEL scripts.
+
+| Topic | AnnData-native py-MARVEL | Original MARVEL-style py-MARVEL / R MARVEL |
+|---|---|---|
+| Primary object | `AnnData` | `MarvelPlate`, `Marvel10x`, or R S3 `MarvelObject` |
+| Plate setup | `adata = mp.setup_plate_anndata(...)` | `marvel = mp.create_marvel_object(...)` / `CreateMarvelObject(...)` |
+| 10x setup | `adata = mp.setup_10x_anndata(...)` | `marvel = mp.create_marvel_object_10x(...)` / `CreateMarvelObject.10x(...)` |
+| Workflow calls | Same function names, e.g. `mp.compute_psi(adata, ...)` | Same function names on MARVEL objects, e.g. `mp.compute_psi(marvel, ...)` |
+| Cell metadata | `adata.obs` | `marvel.splice_pheno`, `marvel.sample_metadata`, or R object slots |
+| Gene metadata | `adata.var` plus MARVEL tables in `adata.uns` | `marvel.gene_feature`, `marvel.gene_metadata`, or R object slots |
+| Results | `adata.uns["marvel"]["tables"]`, `adata.obsm[...]` | Attributes on `MarvelPlate` / `Marvel10x` or R slots such as `$PSI`, `$DE`, `$N.Events` |
+| Scanpy integration | Native: can share `obs`, `var`, `obsm`, `layers`, and downstream Scanpy tooling | Not native; data are stored in MARVEL-specific tables |
+| Serialization | AnnData can be written with standard `.h5ad` workflows after removing or avoiding unsupported table objects as needed | Pickle / TSV export in Python, R serialization in R |
+| Best use case | New Python and omicverse workflows | R parity benchmarks, direct porting of MARVEL tutorials, debugging algorithm-level behavior |
+
+The downstream function names are intentionally shared. This means a migration from original MARVEL-style Python to AnnData usually changes the setup step and the way results are retrieved, not the analysis verbs.
+
+Plate example:
+
+```python
+# AnnData-native
+adata = mp.setup_plate_anndata(...)
+adata = mp.check_alignment(adata, level="SJ")
+adata = mp.compute_psi(adata, event_type="SE", coverage_threshold=10)
+psi_se = adata.uns["marvel"]["tables"]["psi"]["SE"]
+
+# Original MARVEL-style
+marvel = mp.create_marvel_object(...)
+marvel = mp.check_alignment(marvel, level="SJ")
+marvel = mp.compute_psi(marvel, event_type="SE", coverage_threshold=10)
+psi_se = marvel.psi["SE"]
+```
+
+10x droplet example:
+
+```python
+# AnnData-native
+adata = mp.setup_10x_anndata(...)
+adata = mp.annotate_genes_10x(adata)
+adata = mp.compare_values_genes_10x(adata)
+de_gene = adata.uns["marvel"]["tables"]["de_gene"]
+
+# Original MARVEL-style
+marvel = mp.create_marvel_object_10x(...)
+marvel = mp.annotate_genes_10x(marvel)
+marvel = mp.compare_values_genes_10x(marvel)
+de_gene = marvel.de_gene
+```
+
+---
+
 ## R MARVEL API Mapping
 
 The Python API follows the R MARVEL workflow names but uses Python `snake_case`. The preferred Python entry point is AnnData-native: setup functions create an `AnnData` object, and downstream functions update that object in place while returning it. Low-level `MarvelPlate` and `Marvel10x` objects remain available for parity tests and legacy scripts.
