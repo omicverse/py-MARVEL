@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 from anndata import AnnData
 from scipy import sparse
 
 import marvel_py as mp
-from marvel_py import MARVEL, setup_10x_anndata, setup_plate_anndata
+from marvel_py import MARVEL, create_marvel_object_10x, setup_10x_anndata, setup_plate_anndata
 
 
 def test_setup_plate_anndata_creates_scanpy_shaped_container():
@@ -105,3 +106,86 @@ def test_setup_10x_anndata_creates_counts_layer_and_input_namespace():
     assert "counts" in adata.layers
     assert adata.layers["counts"].shape == (2, 2)
     assert adata.uns["marvel_input"]["mode"] == "droplet"
+
+
+def test_10x_pca_and_gtf_are_optional_for_non_annotation_workflows():
+    matrix = sparse.csr_matrix([[1, 0], [2, 3]])  # genes x cells
+    sample_metadata = pd.DataFrame({"cell.id": ["cell1", "cell2"], "cell.type": ["A", "B"]})
+    gene_feature = pd.DataFrame({"gene_short_name": ["gene1", "gene2"]})
+
+    marvel = create_marvel_object_10x(
+        gene_norm_matrix=matrix,
+        gene_norm_pheno=sample_metadata,
+        gene_norm_feature=gene_feature,
+        gene_count_matrix=matrix,
+        gene_count_pheno=sample_metadata[["cell.id"]],
+        gene_count_feature=gene_feature,
+        sj_count_matrix=sparse.csr_matrix([[1, 0]]),
+        sj_count_pheno=sample_metadata[["cell.id"]],
+        sj_count_feature=pd.DataFrame({"coord.intron": ["chr1:1-2"]}),
+    )
+
+    assert marvel.pca is None
+    assert marvel.gtf is None
+    with pytest.raises(ValueError, match="gtf is required for annotate_genes_10x"):
+        mp.annotate_genes_10x(marvel)
+
+    adata = setup_10x_anndata(
+        gene_norm_matrix=matrix,
+        gene_norm_pheno=sample_metadata,
+        gene_norm_feature=gene_feature,
+        gene_count_matrix=matrix,
+        gene_count_pheno=sample_metadata[["cell.id"]],
+        gene_count_feature=gene_feature,
+        sj_count_matrix=sparse.csr_matrix([[1, 0]]),
+        sj_count_pheno=sample_metadata[["cell.id"]],
+        sj_count_feature=pd.DataFrame({"coord.intron": ["chr1:1-2"]}),
+    )
+
+    assert adata.uns["marvel_input"]["pca"] is None
+    assert adata.uns["marvel_input"]["gtf"] is None
+
+    del adata.uns["marvel_input"]["pca"]
+    del adata.uns["marvel_input"]["gtf"]
+    controller = MARVEL(adata, mode="droplet").build()
+
+    assert controller.object.pca is None
+    assert controller.object.gtf is None
+
+
+def test_10x_preannotated_feature_tables_can_skip_gtf_annotation():
+    matrix = sparse.csr_matrix([[1, 0], [2, 3]])  # genes x cells
+    sample_metadata = pd.DataFrame({"cell.id": ["cell1", "cell2"], "cell.type": ["A", "B"]})
+    gene_feature = pd.DataFrame(
+        {"gene_short_name": ["gene1", "gene2"], "gene_type": ["protein_coding", "protein_coding"]}
+    )
+    sj_feature = pd.DataFrame(
+        {
+            "coord.intron": ["chr1:1-2"],
+            "gene_short_name.start": ["gene1"],
+            "gene_short_name.end": ["gene1"],
+            "sj.type": ["start_known.single.gene|end_known.single.gene|same"],
+        }
+    )
+
+    marvel = create_marvel_object_10x(
+        gene_norm_matrix=matrix,
+        gene_norm_pheno=sample_metadata,
+        gene_norm_feature=gene_feature,
+        gene_count_matrix=matrix,
+        gene_count_pheno=sample_metadata[["cell.id"]],
+        gene_count_feature=gene_feature,
+        sj_count_matrix=sparse.csr_matrix([[1, 0]]),
+        sj_count_pheno=sample_metadata[["cell.id"]],
+        sj_count_feature=sj_feature,
+    )
+
+    assert marvel.gtf is None
+    assert marvel.sj_metadata.equals(sj_feature)
+
+    marvel = mp.validate_sj_10x(marvel)
+    marvel = mp.filter_genes_10x(marvel)
+    marvel = mp.check_alignment_10x(marvel)
+
+    assert marvel.sj_metadata["coord.intron"].tolist() == ["chr1:1-2"]
+    assert marvel.gene_metadata["gene_short_name"].tolist() == ["gene1"]

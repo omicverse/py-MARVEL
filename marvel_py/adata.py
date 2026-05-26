@@ -289,8 +289,8 @@ def setup_10x_anndata(
     sj_count_matrix: Any,
     sj_count_pheno: Any,
     sj_count_feature: Any,
-    pca: Any,
-    gtf: Any,
+    gtf: Any = None,
+    pca: Any = None,
     count_layer: str = "counts",
     input_key: str = DEFAULT_INPUT_KEY,
     load_matrices: bool = False,
@@ -515,13 +515,14 @@ class MARVEL:
             "sj_count_matrix",
             "sj_count_pheno",
             "sj_count_feature",
-            "pca",
-            "gtf",
         )
         missing = [key for key in required if key not in spec]
         if missing:
             raise KeyError(f"adata.uns[{self.input_key!r}] missing keys: {missing}")
-        return create_marvel_object_10x(**{key: spec[key] for key in required})
+        kwargs = {key: spec[key] for key in required}
+        kwargs["gtf"] = spec.get("gtf")
+        kwargs["pca"] = spec.get("pca")
+        return create_marvel_object_10x(**kwargs)
 
     def _step(self, name: str, *args: Any, **kwargs: Any) -> "MARVEL":
         import marvel_py as mp

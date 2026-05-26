@@ -93,7 +93,6 @@ marvel = mp.create_marvel_object_10x(
     sj_count_matrix="sj_count_matrix.mtx",
     sj_count_pheno="sj_count_pheno.tsv",
     sj_count_feature="sj_count_feature.tsv",
-    pca="pca.tsv",
     gtf="annotation.gtf",
 )
 
@@ -124,6 +123,10 @@ marvel = mp.compare_values_sj_10x(
 )
 marvel = mp.compare_values_genes_10x(marvel)
 ```
+
+Pass `pca="pca.tsv"` only when you want to use coordinate-based helpers such as `mp.plot_values_pca_cell_group_10x(...)`, `mp.plot_values_pca_gene_10x(...)`, or `mp.plot_values_pca_psi_10x(...)`.
+
+Pass `gtf="annotation.gtf"` when you want py-MARVEL to annotate genes/SJs with `mp.annotate_genes_10x(...)`, `mp.annotate_sj_10x(...)`, or gene-structure plotting helpers. If your feature tables are already annotated (`gene_type` in gene features and `gene_short_name.start`, `gene_short_name.end`, `sj.type` in SJ features), 10x object creation, AnnData setup, and downstream SJ filtering/alignment can run without `gtf`.
 
 Both MARVEL-style object calls and AnnData function calls are supported. The old nested `api` facade and legacy `py_marvel` mirror are not the supported interface.
 

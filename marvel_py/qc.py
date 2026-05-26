@@ -127,7 +127,7 @@ def _check_alignment_inplace(marvel_object: MarvelPlate, *, level: str) -> Marve
 
 def _validate_sj_10x_inplace(marvel_object: Marvel10x, *, keep_novel_sj: bool = False) -> Marvel10x:
     if marvel_object.sj_metadata is None:
-        raise ValueError("annotate_sj must run before validate_sj")
+        raise ValueError("annotate_sj_10x must run or sj_count_feature must contain SJ annotations before validate_sj")
 
     sj_types_1 = {"start_known.single.gene|end_known.single.gene|same"}
     sj_types_2 = {
@@ -158,6 +158,8 @@ def _validate_sj_10x_inplace(marvel_object: Marvel10x, *, keep_novel_sj: bool = 
 def _filter_genes_10x_inplace(marvel_object: Marvel10x, *, gene_type: str = "protein_coding") -> Marvel10x:
     if marvel_object.sj_metadata is None:
         raise ValueError("validate_sj must run before filter_genes")
+    if "gene_type" not in marvel_object.gene_metadata.columns:
+        raise ValueError("annotate_genes_10x must run or gene feature table must contain gene_type before filter_genes")
 
     gene_metadata = marvel_object.gene_metadata[marvel_object.gene_metadata["gene_type"] == gene_type].copy()
     keep_genes = gene_metadata["gene_short_name"].astype(str).tolist()

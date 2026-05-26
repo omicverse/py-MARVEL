@@ -53,10 +53,10 @@ def create_marvel_object(
     splice_junction,
     splice_pheno,
     splice_feature,
-    intron_counts,
+    intron_counts=None,
     gene_feature,
     exp,
-    gtf,
+    gtf=None,
 ) -> MarvelPlate:
     return MarvelPlate(
         splice_pheno=maybe_read_table(splice_pheno, dtype=str),
@@ -80,10 +80,10 @@ def create_marvel_object_10x(
     sj_count_matrix,
     sj_count_pheno,
     sj_count_feature,
-    pca,
-    gtf,
+    gtf=None,
+    pca=None,
 ) -> Marvel10x:
-    inputs = [
+    path_inputs = [
         gene_norm_matrix,
         gene_norm_pheno,
         gene_norm_feature,
@@ -93,10 +93,12 @@ def create_marvel_object_10x(
         sj_count_matrix,
         sj_count_pheno,
         sj_count_feature,
-        pca,
-        gtf,
     ]
-    if all(isinstance(value, (str, Path)) for value in inputs):
+    if (
+        all(isinstance(value, (str, Path)) for value in path_inputs)
+        and (gtf is None or isinstance(gtf, (str, Path)))
+        and (pca is None or isinstance(pca, (str, Path)))
+    ):
         return Marvel10x.from_paths(
             gene_norm_matrix=gene_norm_matrix,
             gene_norm_pheno=gene_norm_pheno,

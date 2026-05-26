@@ -40,8 +40,17 @@ def _classify_sj(start_value: str | float | None, end_value: str | float | None)
     return "start_known.single.gene|end_known.multi.gene"
 
 
+def _require_gtf(marvel_object: Marvel10x, function_name: str) -> pd.DataFrame:
+    if marvel_object.gtf is None or marvel_object.gtf.empty:
+        raise ValueError(f"gtf is required for {function_name}")
+    if not set([f"V{i}" for i in range(1, 10)]).issubset(marvel_object.gtf.columns):
+        raise ValueError(f"gtf must contain V1-V9 columns for {function_name}")
+    return marvel_object.gtf
+
+
 def _annotate_genes_10x_inplace(marvel_object: Marvel10x) -> Marvel10x:
-    gtf_genes = marvel_object.gtf[marvel_object.gtf["V3"] == "gene"].copy()
+    gtf = _require_gtf(marvel_object, "annotate_genes_10x")
+    gtf_genes = gtf[gtf["V3"] == "gene"].copy()
     gtf_genes["gene_short_name"] = gtf_genes["V9"].map(
         lambda value: extract_gtf_attr(value, "gene_name")
     )
@@ -77,7 +86,10 @@ def _annotate_sj_10x_inplace(marvel_object: Marvel10x) -> Marvel10x:
         }
     )
 
-    exon_gtf = marvel_object.gtf[marvel_object.gtf["V3"] == "exon"].copy()
+    gtf = _require_gtf(marvel_object, "annotate_sj_10x")
+    exon_gtf = gtf[gtf["V3"] == "exon"].copy()
+    if exon_gtf.empty:
+        raise ValueError("gtf must contain exon rows for annotate_sj_10x")
     exon_gtf["gene_short_name"] = exon_gtf["V9"].map(lambda value: extract_gtf_attr(value, "gene_name"))
     exon_gtf["start_intron"] = (exon_gtf["V5"].astype(int) + 1).astype(str)
     exon_gtf["end_intron"] = (exon_gtf["V4"].astype(int) - 1).astype(str)

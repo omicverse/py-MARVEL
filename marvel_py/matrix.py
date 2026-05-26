@@ -91,13 +91,7 @@ def _normalize_donor_cell_group_list(
     return normalized
 
 
-def _load_sparse_matrix(
-    matrix_path: str | Path,
-    feature_path: str | Path,
-    feature_column: str,
-    pheno_path: str | Path,
-    pheno_column: str,
-) -> "NamedMatrix":
+def _read_sparse_matrix(matrix_path: str | Path) -> sparse.csr_matrix:
     matrix = _load_cached_sparse_matrix(matrix_path)
     if matrix is None:
         matrix = mmread(str(matrix_path))
@@ -106,16 +100,47 @@ def _load_sparse_matrix(
         else:
             matrix = sparse.csr_matrix(np.asarray(matrix))
         _write_cached_sparse_matrix(matrix_path, matrix)
+    return matrix
+
+
+def _load_sparse_matrix(
+    matrix_path: str | Path,
+    feature_path: str | Path,
+    feature_column: str,
+    pheno_path: str | Path,
+    pheno_column: str,
+) -> "NamedMatrix":
+    matrix = _read_sparse_matrix(matrix_path)
 
     feature = read_table(feature_path)
     pheno = read_table(pheno_path)
+    return _named_matrix_from_sparse_and_tables(
+        matrix,
+        feature,
+        feature_column,
+        pheno,
+        pheno_column,
+        matrix_path=matrix_path,
+    )
+
+
+def _named_matrix_from_sparse_and_tables(
+    matrix: sparse.csr_matrix,
+    feature: pd.DataFrame,
+    feature_column: str,
+    pheno: pd.DataFrame,
+    pheno_column: str,
+    *,
+    matrix_path: str | Path | None = None,
+) -> "NamedMatrix":
     row_ids = feature[feature_column].astype(str).to_numpy()
     col_ids = pheno[pheno_column].astype(str).to_numpy()
 
     if matrix.shape != (len(row_ids), len(col_ids)):
+        source = f" for {matrix_path}" if matrix_path is not None else ""
         raise ValueError(
             f"Matrix shape {matrix.shape} does not match feature/pheno lengths "
-            f"({len(row_ids)}, {len(col_ids)}) for {matrix_path}"
+            f"({len(row_ids)}, {len(col_ids)}){source}"
         )
 
     return NamedMatrix(matrix=matrix, row_ids=row_ids, col_ids=col_ids)
@@ -127,7 +152,9 @@ def _coerce_table(table) -> pd.DataFrame:
     return read_table(table)
 
 
-def _coerce_gtf(gtf) -> pd.DataFrame:
+def _coerce_gtf(gtf) -> pd.DataFrame | None:
+    if gtf is None:
+        return None
     if isinstance(gtf, pd.DataFrame):
         gtf_df = gtf.copy()
     else:
@@ -166,16 +193,14 @@ def _named_matrix_from_data(
     sparse_matrix = _coerce_sparse_matrix(matrix)
     feature_df = _coerce_table(feature)
     pheno_df = _coerce_table(pheno)
-    row_ids = feature_df[feature_column].astype(str).to_numpy()
-    col_ids = pheno_df[pheno_column].astype(str).to_numpy()
+    return _named_matrix_from_sparse_and_tables(sparse_matrix, feature_df, feature_column, pheno_df, pheno_column)
 
-    if sparse_matrix.shape != (len(row_ids), len(col_ids)):
-        raise ValueError(
-            f"Matrix shape {sparse_matrix.shape} does not match feature/pheno lengths "
-            f"({len(row_ids)}, {len(col_ids)})"
-        )
 
-    return NamedMatrix(matrix=sparse_matrix, row_ids=row_ids, col_ids=col_ids)
+def _sj_metadata_from_feature(feature: pd.DataFrame) -> pd.DataFrame | None:
+    required = ["coord.intron", "gene_short_name.start", "gene_short_name.end", "sj.type"]
+    if not set(required).issubset(feature.columns):
+        return None
+    return feature.loc[:, required].copy()
 
 
 @dataclass
@@ -232,8 +257,8 @@ class Marvel10x:
     gene_norm_matrix: NamedMatrix
     gene_count_matrix: NamedMatrix
     sj_count_matrix: NamedMatrix
-    pca: pd.DataFrame
-    gtf: pd.DataFrame
+    gtf: pd.DataFrame | None = None
+    pca: pd.DataFrame | None = None
     sj_metadata: pd.DataFrame | None = None
     pct_expr_gene: pd.DataFrame | None = None
     pct_expr_sj: pd.DataFrame | None = None
@@ -267,13 +292,15 @@ class Marvel10x:
         sj_count_matrix: str | Path,
         sj_count_pheno: str | Path,
         sj_count_feature: str | Path,
-        pca: str | Path,
-        gtf: str | Path,
+        gtf: str | Path | None = None,
+        pca: str | Path | None = None,
     ) -> "Marvel10x":
         sample_metadata = read_table(gene_norm_pheno)
         gene_metadata = read_table(gene_norm_feature)
-        pca_df = read_table(pca)
-        gtf_df = pd.read_csv(
+        sj_pheno = read_table(sj_count_pheno)
+        sj_feature = read_table(sj_count_feature)
+        pca_df = None if pca is None else read_table(pca)
+        gtf_df = None if gtf is None else pd.read_csv(
             gtf,
             sep="\t",
             header=None,
@@ -290,12 +317,18 @@ class Marvel10x:
             gene_count_matrix=_load_sparse_matrix(
                 gene_count_matrix, gene_count_feature, "gene_short_name", gene_count_pheno, "cell.id"
             ),
-            sj_count_matrix=_load_sparse_matrix(
-                sj_count_matrix, sj_count_feature, "coord.intron", sj_count_pheno, "cell.id"
+            sj_count_matrix=_named_matrix_from_sparse_and_tables(
+                _read_sparse_matrix(sj_count_matrix),
+                sj_feature,
+                "coord.intron",
+                sj_pheno,
+                "cell.id",
+                matrix_path=sj_count_matrix,
             ),
             pca=pca_df,
             gtf=gtf_df,
             gene_metadata=gene_metadata,
+            sj_metadata=_sj_metadata_from_feature(sj_feature),
         )
 
     @classmethod
@@ -311,12 +344,13 @@ class Marvel10x:
         sj_count_matrix,
         sj_count_pheno,
         sj_count_feature,
-        pca,
-        gtf,
+        gtf=None,
+        pca=None,
     ) -> "Marvel10x":
         sample_metadata = _coerce_table(gene_norm_pheno)
         gene_metadata = _coerce_table(gene_norm_feature)
-        pca_df = _coerce_table(pca)
+        sj_feature = _coerce_table(sj_count_feature)
+        pca_df = None if pca is None else _coerce_table(pca)
         gtf_df = _coerce_gtf(gtf)
 
         return cls(
@@ -333,6 +367,7 @@ class Marvel10x:
             pca=pca_df,
             gtf=gtf_df,
             gene_metadata=gene_metadata,
+            sj_metadata=_sj_metadata_from_feature(sj_feature),
         )
 
     def annotate_genes(self) -> "Marvel10x":
@@ -409,6 +444,8 @@ class Marvel10x:
         )
         gene_results = gene_results[gene_results["pct.cells.expr"] > min_pct_cells_genes]
 
+        if self.sj_metadata is None:
+            raise ValueError("annotate_sj_10x must run or sj_count_feature must contain SJ annotations")
         sj_metadata = self.sj_metadata.copy()
         sj_count_matrix = self.sj_count_matrix
         if downsample_coord_introns is not None:
@@ -543,11 +580,15 @@ class Marvel10x:
         )
 
     def _sj_above_threshold(self, cell_ids: list[str], genes: list[str], min_pct_cells_sj: float) -> list[str]:
+        if self.sj_metadata is None:
+            raise ValueError("annotate_sj_10x must run or sj_count_feature must contain SJ annotations")
         coord = self.sj_metadata.loc[self.sj_metadata["gene_short_name.start"].isin(genes), "coord.intron"].tolist()
         table = self._expression_rate_table(self.sj_count_matrix.subset_rows(coord), cell_ids, "coord.intron", "group")
         return table.loc[table["pct.cells.expr"] > min_pct_cells_sj, "coord.intron"].tolist()
 
     def _build_sj_results(self, coord_introns: list[str], group1: list[str], group2: list[str]) -> pd.DataFrame:
+        if self.sj_metadata is None:
+            raise ValueError("annotate_sj_10x must run or sj_count_feature must contain SJ annotations")
         sj_meta = self.sj_metadata.set_index("coord.intron").loc[coord_introns].reset_index()
         gene_ids = list(dict.fromkeys(sj_meta["gene_short_name.start"].tolist()))
         gene_index = {gene: i for i, gene in enumerate(gene_ids)}

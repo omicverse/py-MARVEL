@@ -459,8 +459,14 @@ def plot_pct_expr_cells_sj_10x(
     return marvel_object
 
 
+def _require_pca(marvel_object: Marvel10x) -> pd.DataFrame:
+    if marvel_object.pca is None:
+        raise ValueError("pca coordinates are required for plot_values_pca_*_10x helpers")
+    return marvel_object.pca.copy()
+
+
 def _copy_pca_table(marvel_object: Marvel10x, *, value_column: str, values: pd.Series) -> pd.DataFrame:
-    pca = marvel_object.pca.copy()
+    pca = _require_pca(marvel_object)
     cell_col = "cell.id" if "cell.id" in pca.columns else pca.columns[0]
     pca[cell_col] = pca[cell_col].astype(str)
     table = pca.copy()
@@ -476,7 +482,7 @@ def plot_values_pca_cell_group_10x(
     type: str,
 ) -> Marvel10x:
     _ = type
-    table = marvel_object.pca.copy()
+    table = _require_pca(marvel_object)
     cell_col = "cell.id" if "cell.id" in table.columns else table.columns[0]
     if cell_ids is not None:
         allowed = {str(cell_id) for cell_id in cell_ids}
