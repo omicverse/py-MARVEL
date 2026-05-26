@@ -116,6 +116,84 @@ Both AnnData function calls and low-level object helpers (`MarvelPlate`, `Marvel
 
 ---
 
+## R MARVEL API Mapping
+
+The Python API follows the R MARVEL workflow names but uses Python `snake_case`. The preferred Python entry point is AnnData-native: setup functions create an `AnnData` object, and downstream functions update that object in place while returning it. Low-level `MarvelPlate` and `Marvel10x` objects remain available for parity tests and legacy scripts.
+
+### Core object model
+
+| R MARVEL | py-MARVEL | Notes |
+|---|---|---|
+| `CreateMarvelObject(...)` | `mp.setup_plate_anndata(...)` | Preferred plate entry point; stores inputs in `adata.uns["marvel_input"]`. |
+| `CreateMarvelObject(...)` | `mp.create_marvel_object(...)` | Legacy low-level `MarvelPlate` constructor, kept for R parity and benchmarks. |
+| `CreateMarvelObject.10x(...)` | `mp.setup_10x_anndata(...)` | Preferred 10x entry point; Matrix Market inputs are lazy by default. |
+| `CreateMarvelObject.10x(...)` | `mp.create_marvel_object_10x(...)` | Legacy low-level `Marvel10x` constructor. |
+| R S3 `MarvelObject` slots | `adata.uns["marvel"]["tables"]`, `adata.obsm[...]` | Tabular results are mirrored into AnnData; the runtime backend object is cached outside `adata.uns`. |
+
+### Plate workflow
+
+| R MARVEL | py-MARVEL |
+|---|---|
+| `CheckAlignment(...)` | `mp.check_alignment(...)` |
+| `SubsetSamples(...)` | `mp.subset_samples(...)` |
+| `TransformExpValues(...)` | `mp.transform_exp_values(...)` |
+| `DetectEvents(...)`, `DetectEvents.AFE(...)`, `DetectEvents.ALE(...)` | `mp.detect_events(...)` |
+| `ComputePSI(...)`, `ComputePSI.SE(...)`, `ComputePSI.MXE(...)`, `ComputePSI.RI(...)`, `ComputePSI.A5SS(...)`, `ComputePSI.A3SS(...)`, `ComputePSI.AFE(...)`, `ComputePSI.ALE(...)` | `mp.compute_psi(..., event_type="SE")` |
+| `ComputePSI.Posterior(...)` | `mp.compute_psi_posterior(...)` |
+| `AssignModality(...)` | `mp.assign_modality(...)` |
+| `CountEvents(...)` | `mp.count_events(...)` |
+| `PropModality(...)`, `PropModality.Bar(...)`, `PropModality.Doughnut(...)` | `mp.prop_modality(...)`, `mp.prop_modality_bar(...)`, `mp.prop_modality_doughnut(...)` |
+| `CompareValues(...)`, `CompareValues.PSI(...)`, `CompareValues.Exp(...)`, `CompareValues.Exp.Spliced(...)` | `mp.compare_values(...)` |
+| `RunPCA(...)` | `mp.run_pca(...)` |
+| `PlotValues(...)` | `mp.plot_values(...)` |
+| `PlotDEValues(...)` | `mp.plot_de_values(...)` |
+| `ModalityChange(...)` | `mp.modality_change(...)` |
+| `IsoSwitch(...)`, `IsoSwitch.PlotExpr(...)` | `mp.iso_switch(...)`, `mp.iso_switch_plot_expr(...)` |
+| `IdentifyVariableEvents(...)` | `mp.identify_variable_events(...)` |
+| `PctASE(...)` | `mp.pct_ase(...)` |
+| `ParseGTF(...)` | `mp.parse_gtf(...)` |
+| `PrepareBedFile.RI(...)` | `mp.prepare_bed_file_ri(...)` |
+| `Preprocess_rMATS(...)`, `Preprocess_rMATS.SE(...)`, `Preprocess_rMATS.MXE(...)`, `Preprocess_rMATS.RI(...)`, `Preprocess_rMATS.A5SS(...)`, `Preprocess_rMATS.A3SS(...)` | `mp.preprocess_rmats(...)`, `mp.preprocess_rmats_se(...)`, `mp.preprocess_rmats_mxe(...)`, `mp.preprocess_rmats_ri(...)`, `mp.preprocess_rmats_a5ss(...)`, `mp.preprocess_rmats_a3ss(...)` |
+| `RemoveCrypticSS(...)`, `RemoveCrypticSS.AFE(...)`, `RemoveCrypticSS.ALE(...)` | `mp.remove_cryptic_ss(...)`, `mp.remove_cryptic_ss_afe(...)`, `mp.remove_cryptic_ss_ale(...)` |
+| `SubsetCrypticSS(...)`, `SubsetCrypticSS.A5SS(...)`, `SubsetCrypticSS.A3SS(...)`, `SubsetCrypticA3SS(...)` | `mp.subset_cryptic_ss(...)`, `mp.subset_cryptic_ss_a5ss(...)`, `mp.subset_cryptic_ss_a3ss(...)`, `mp.subset_cryptic_a3ss(...)` |
+
+### 10x droplet workflow
+
+| R MARVEL | py-MARVEL |
+|---|---|
+| `AnnotateGenes.10x(...)` | `mp.annotate_genes_10x(...)` |
+| `AnnotateSJ.10x(...)` | `mp.annotate_sj_10x(...)` |
+| `ValidateSJ.10x(...)` | `mp.validate_sj_10x(...)` |
+| `FilterGenes.10x(...)` | `mp.filter_genes_10x(...)` |
+| `CheckAlignment.10x(...)` | `mp.check_alignment_10x(...)` |
+| `PlotPctExprCells.Genes.10x(...)` | `mp.plot_pct_expr_cells_genes_10x(...)` |
+| `PlotPctExprCells.SJ.10x(...)` | `mp.plot_pct_expr_cells_sj_10x(...)` |
+| `CompareValues.SJ.10x(...)` | `mp.compare_values_sj_10x(...)` |
+| `CompareValues.Genes.10x(...)` | `mp.compare_values_genes_10x(...)` |
+| `CompareValues.SJ.DonorLevel.10x(...)` | `mp.compare_values_sj_donor_level_10x(...)` |
+| `PlotDEValues.SJ.10x(...)` | `mp.plot_de_values_sj_10x(...)` |
+| `PlotDEValues.Genes.10x(...)` | `mp.plot_de_values_genes_10x(...)` |
+| `PlotValues.Gene.Pseudobulk.10x(...)` | `mp.plot_values_gene_pseudobulk_10x(...)` |
+| `PlotValues.Gene.SingleCell.10x(...)` | `mp.plot_values_gene_single_cell_10x(...)` |
+| `PlotValues.PCA.CellGroup.10x(...)` | `mp.plot_values_pca_cell_group_10x(...)` |
+| `PlotValues.PCA.Gene.10x(...)` | `mp.plot_values_pca_gene_10x(...)` |
+| `PlotValues.PCA.PSI.10x(...)` | `mp.plot_values_pca_psi_10x(...)` |
+| `PlotValues.PSI.Pseudobulk.10x(...)` | `mp.plot_values_psi_pseudobulk_10x(...)` |
+| `PlotValues.PSI.Pseudobulk.Heatmap.10x(...)` | `mp.plot_values_psi_pseudobulk_heatmap_10x(...)` |
+| `IsoSwitch.10x(...)` | `mp.iso_switch_10x(...)` |
+| `adhocGene.TabulateExpression.Gene.10x(...)` | `mp.adhoc_gene_tabulate_expression_gene_10x(...)` |
+| `adhocGene.TabulateExpression.PSI.10x(...)` | `mp.adhoc_gene_tabulate_expression_psi_10x(...)` |
+| `adhocGene.DE.Gene.10x(...)` | `mp.adhoc_gene_de_gene_10x(...)` |
+| `adhocGene.DE.PSI.10x(...)` | `mp.adhoc_gene_de_psi_10x(...)` |
+| `adhocGene.PlotDEValues.10x(...)` | `mp.adhoc_gene_plot_de_values_10x(...)` |
+| `adhocGene.PlotSJPosition.10x(...)` | `mp.adhoc_gene_plot_sj_position_10x(...)` |
+
+### Not yet ported from R MARVEL
+
+Some R exports are intentionally not part of the current Python public surface: `BioPathways*`, `FindPTC*`, `PropPTC`, `CompareExpr`, and `AnnoVolcanoPlot`. Use R MARVEL directly for those workflows until they are ported.
+
+---
+
 ## Workflow Coverage
 
 | Area | Plate | 10x droplet |
