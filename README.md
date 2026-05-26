@@ -1,0 +1,228 @@
+# marvel-py
+
+A **pure-Python reimplementation of MARVEL** for single-cell alternative splicing analysis across plate-based and 10x droplet workflows.
+
+- No `rpy2`; Python workflows operate on flat TSV / Matrix Market inputs
+- Implements PSI quantification, modality summaries, differential gene / splicing analysis, variable splicing event selection, PCA helpers, isoform switching, and rMATS / cryptic-splice-site utilities
+- R MARVEL parity is tracked with committed reference fixtures and full external replay benchmarks
+
+> This package is a standalone Python port of the public user-facing MARVEL workflow surface. The R package remains the reference implementation; this repo keeps Python behavior close to R MARVEL through R-vs-Python tests, audit fixtures, and external benchmark reports.
+
+## Install
+
+From this repository:
+
+```bash
+pip install -e .
+pip install scikit-learn
+```
+
+`scikit-learn` is needed by the public plotting/PCA namespace. For benchmark report generation, also install `matplotlib`, or use the `uv run --with ...` commands shown below.
+
+The bundled tutorial notebooks are expected to run in the `ove` micromamba environment and import the package normally:
+
+```python
+import marvel_py as mp
+```
+
+They do not modify `sys.path`.
+
+## Quick Start
+
+### Plate workflow
+
+```python
+import marvel_py as mp
+
+plate = mp.create_marvel_object(
+    splice_pheno="splice_pheno.tsv",
+    splice_junction="splice_junction.tsv",
+    intron_counts="intron_counts.tsv",
+    gene_feature="gene_feature.tsv",
+    exp="exp.tsv",
+    gtf="annotation.gtf",
+    splice_feature={
+        "SE": "SE_feature.tsv",
+        "MXE": "MXE_feature.tsv",
+        "RI": "RI_feature.tsv",
+        "A5SS": "A5SS_feature.tsv",
+        "A3SS": "A3SS_feature.tsv",
+    },
+)
+
+plate = mp.check_alignment(plate, level="SJ")
+plate = mp.compute_psi(plate, event_type="SE", coverage_threshold=10.0)
+
+pass_ids = plate.splice_pheno.loc[plate.splice_pheno["qc.seq"] == "pass", "sample.id"]
+plate = mp.subset_samples(plate, sample_ids=pass_ids)
+plate = mp.transform_exp_values(plate, offset=1.0, transformation="log2", threshold_lower=1.0)
+
+g1 = plate.get_sample_ids("cell.type", ["iPSC"])
+g2 = plate.get_sample_ids("cell.type", ["Endoderm"])
+plate = mp.compare_values(plate, cell_group_g1=g1, cell_group_g2=g2, level="gene", method="wilcox")
+```
+
+### 10x droplet workflow
+
+```python
+import marvel_py as mp
+
+marvel = mp.create_marvel_object_10x(
+    gene_norm_matrix="gene_norm_matrix.mtx",
+    gene_norm_pheno="gene_norm_pheno.tsv",
+    gene_norm_feature="gene_norm_feature.tsv",
+    gene_count_matrix="gene_count_matrix.mtx",
+    gene_count_pheno="gene_count_pheno.tsv",
+    gene_count_feature="gene_count_feature.tsv",
+    sj_count_matrix="sj_count_matrix.mtx",
+    sj_count_pheno="sj_count_pheno.tsv",
+    sj_count_feature="sj_count_feature.tsv",
+    pca="pca.tsv",
+    gtf="annotation.gtf",
+)
+
+marvel = mp.annotate_genes_10x(marvel)
+marvel = mp.annotate_sj_10x(marvel)
+marvel = mp.validate_sj_10x(marvel)
+marvel = mp.filter_genes_10x(marvel)
+marvel = mp.check_alignment_10x(marvel)
+
+g1, g2 = marvel.get_cell_groups("cell.type", "iPSC", "Cardio day 10")
+marvel = mp.plot_pct_expr_cells_genes_10x(marvel, cell_group_g1=g1, cell_group_g2=g2)
+marvel = mp.plot_pct_expr_cells_sj_10x(marvel, cell_group_g1=g1, cell_group_g2=g2)
+marvel = mp.compare_values_sj_10x(marvel, cell_group_g1=g1, cell_group_g2=g2, n_iterations=10)
+marvel = mp.compare_values_genes_10x(marvel)
+```
+
+Both object-oriented helpers (`MarvelPlate`, `Marvel10x`) and module-level functions are supported. The preferred public API is `import marvel_py as mp` followed by `mp.function(...)`; the old nested `api` facade and legacy `py_marvel` mirror are not the supported interface.
+
+---
+
+## Workflow Coverage
+
+| Area | Plate | 10x droplet |
+|---|---:|---:|
+| Object creation and alignment | yes | yes |
+| Gene and splice-junction annotation | via input feature tables / GTF helpers | yes |
+| PSI / splice-junction expression summaries | yes | yes |
+| Differential gene and splicing analysis | yes | yes |
+| Variable splicing event selection | yes | no |
+| PCA / plotting helper tables | yes | yes |
+| Isoform switching helpers | yes | yes |
+| rMATS and cryptic splice-site utilities | yes | no |
+
+The implementation targets the public `MARVEL/man` workflow surface rather than private R internals.
+
+## Benchmarks
+
+The external benchmark replays R MARVEL and `marvel_py` on the full external tutorial datasets:
+
+- `external_plate_data`: `iPSC` vs `Endoderm`, `qc.seq == pass`, with `SE/MXE/RI/A5SS/A3SS` inputs available
+- `external_droplet_data`: `iPSC` vs `Cardio day 10`, using 10 permutations for tractable full-data replay
+- Plate R replay rebuilds from flat files and recomputes PSI. Droplet R replay uses the bundled R MARVEL object and recomputes downstream summaries / DE; Python replay loads the flat Matrix Market / TSV inputs.
+
+Latest validated run:
+
+| Run | Artifacts | Numeric metrics | Nonzero row deltas | Max absolute difference | Minimum Pearson r |
+|---|---:|---:|---:|---:|---:|
+| `benchmark/runs/20260525T070728Z` | 10 | 323 | 0 | `8.91e-4` | `0.9999961188133987` |
+
+Runtime from the latest run:
+
+| Section | R | Python | Speedup |
+|---|---:|---:|---:|
+| Plate full replay | `1116.16 s` | `345.39 s` | `3.23x` |
+| Plate variable splicing only | `2.71 s` | `0.86 s` | `3.15x` |
+| Droplet replay | `1412.29 s` | `477.30 s` | `2.96x` |
+
+Artifact-level agreement:
+
+| Section | Artifact | Rows R | Rows Python | Max abs diff | Min Pearson r |
+|---|---|---:|---:|---:|---:|
+| Plate | `psi_se` | 20509 | 20509 | `6.66e-16` | `0.9999999999999976` |
+| Plate | `psi_ri` | 8295 | 8295 | `6.66e-16` | `0.9999999999999988` |
+| Plate | `de_gene` | 21059 | 21059 | `5.15e-14` | `0.9999999999999998` |
+| Plate | `count_events_iPSC` | 5 | 5 | `0` | `1.0` |
+| Plate | `count_events_endoderm` | 5 | 5 | `0` | `0.9999999999999999` |
+| Plate | `variable_splicing` | 13318 | 13318 | `8.91e-4` | `0.9999961188133987` |
+| Droplet | `pct_expr_gene` | 20187 | 20187 | `0` | `1.0` |
+| Droplet | `pct_expr_sj` | 1861 | 1861 | `0` | `0.9999999999999998` |
+| Droplet | `de_sj` | 2937 | 2937 | `8.88e-15` | `0.9999999999999999` |
+| Droplet | `de_gene` | 831 | 831 | `7.11e-15` | `0.9999999999999999` |
+
+The retained summary figures are in [`benchmark/results/figures`](benchmark/results/figures):
+
+- `benchmark_summary_figure.png`
+- `artifact_row_delta.png`
+- `top20_metric_max_abs_diff.png`
+- `lowest20_metric_pearson_r.png`
+- `plate_metric_heatmap.png`
+- `droplet_metric_heatmap.png`
+- `runtime_r_vs_python.png`
+- per-artifact scatter plots such as `plate__psi_se__scatter.png`, `plate__variable_splicing__scatter.png`, and `droplet__de_sj__scatter.png`
+
+To rerun the external benchmark and archive the results:
+
+```bash
+# Optional: only needed when Rscript is not already on PATH.
+export MARVEL_RSCRIPT=/path/to/Rscript
+
+uv run --with matplotlib --with scikit-learn \
+  python benchmark/scripts/run_external_benchmark_archive.py
+
+uv run --with matplotlib --with scikit-learn \
+  python benchmark/scripts/plot_benchmark_summary_figure.py \
+  --run-dir benchmark/runs/<run_id>
+```
+
+R benchmarks require an R environment with MARVEL and its dependencies installed. `MARVEL_RSCRIPT`
+can point to any compatible R installation; it is not tied to a local micromamba path.
+
+The archive contains copied results, code snapshots, command logs, `metric_summary.tsv`, `artifact_summary.tsv`, and report figures.
+
+---
+
+## Examples
+
+| Notebook | What it covers |
+|---|---|
+| [`examples/plate_data.ipynb`](examples/plate_data.ipynb) | Plate-based MARVEL workflow using `import marvel_py as mp` |
+| [`examples/Droplet_data.ipynb`](examples/Droplet_data.ipynb) | 10x droplet MARVEL workflow using `import marvel_py as mp` |
+
+Scripted demos are also available:
+
+| Script | Purpose |
+|---|---|
+| [`scripts/run_plate_ref_python.py`](scripts/run_plate_ref_python.py) | Run the core plate tutorial workflow from exported flat files |
+| [`scripts/run_ref1_python.py`](scripts/run_ref1_python.py) | Run the core droplet ref1 workflow from Matrix Market / TSV inputs |
+| [`scripts/export_plate_demo_inputs.R`](scripts/export_plate_demo_inputs.R) | Export R MARVEL plate demo data into Python-friendly inputs |
+| [`scripts/export_marvel_demo_inputs.R`](scripts/export_marvel_demo_inputs.R) | Export R MARVEL droplet demo data into Python-friendly inputs |
+
+## Relationship to R MARVEL
+
+R MARVEL is the canonical package:
+
+- Reference package: [`MARVEL`](../MARVEL)
+- Python package: this repo, importing as `marvel_py`
+- Benchmark code: [`benchmark/scripts`](benchmark/scripts)
+
+
+If you need exact R package behavior for unsupported private internals, use R MARVEL directly. If you need the implemented public workflows from Python, use `marvel_py`.
+
+## Relationship to omicverse
+Developed following the [omicverse-to-developer](https://github.com/omicverse/omicverse-to-developer) py-<Name> conventions (pure-Python, no rpy2 in production code, AnnData-native I/O, Numba only on hot kernels). Upstream integration plan:
+
+Canonical implementation: omicverse.external.copykat_py (pending)
+Standalone mirror (this repo): same code, same API, without the full omicverse packaging
+
+## Citation
+
+If you use this package, please cite the original MARVEL paper:
+
+> Wei Xiong Wen, Adam J Mead, Supat Thongjuea, MARVEL: an integrated alternative splicing analysis platform for single-cell RNA sequencing data, Nucleic Acids Research, Volume 51, Issue 5, 21 March 2023, Page e29, https://doi.org/10.1093/nar/gkac1260
+
+and acknowledge omicverse / this repo for the Python port and optimisations.
+
+## License
+
+GNU GPLv3.
