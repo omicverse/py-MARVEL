@@ -2,7 +2,8 @@
 
 A **pure-Python reimplementation of MARVEL** for single-cell alternative splicing analysis across plate-based and 10x droplet workflows.
 
-- No `rpy2`; Python workflows operate on flat TSV / Matrix Market inputs
+- AnnData-native workflow controller for Scanpy-style pipelines, with MARVEL inputs in `adata.uns` and results written back to `adata.uns` / `adata.obsm`
+- No `rpy2`; flat TSV / Matrix Market inputs remain supported as the backend compatibility layer
 - Implements PSI quantification, modality summaries, differential gene / splicing analysis, variable splicing event selection, PCA helpers, isoform switching, and rMATS / cryptic-splice-site utilities
 - R MARVEL parity is tracked with committed reference fixtures and full external replay benchmarks
 
@@ -14,10 +15,9 @@ From this repository:
 
 ```bash
 pip install -e .
-pip install scikit-learn
 ```
 
-`scikit-learn` is needed by the public plotting/PCA namespace. For benchmark report generation, also install `matplotlib`, or use the `uv run --with ...` commands shown below.
+For benchmark report generation, also install `matplotlib`, or use the `uv run --with ...` commands shown below.
 
 The bundled tutorial notebooks are expected to run in the `ove` micromamba environment and import the package normally:
 
@@ -29,12 +29,12 @@ They do not modify `sys.path`.
 
 ## Quick Start
 
-### Plate workflow
+### AnnData-native plate workflow
 
 ```python
 import marvel_py as mp
 
-plate = mp.create_marvel_object(
+adata = mp.setup_plate_anndata(
     splice_pheno="splice_pheno.tsv",
     splice_junction="splice_junction.tsv",
     intron_counts="intron_counts.tsv",
@@ -50,24 +50,30 @@ plate = mp.create_marvel_object(
     },
 )
 
-plate = mp.check_alignment(plate, level="SJ")
-plate = mp.compute_psi(plate, event_type="SE", coverage_threshold=10.0)
+adata = mp.check_alignment(adata, level="SJ")
+adata = mp.compute_psi(adata, event_type="SE", coverage_threshold=10.0)
 
-pass_ids = plate.splice_pheno.loc[plate.splice_pheno["qc.seq"] == "pass", "sample.id"]
-plate = mp.subset_samples(plate, sample_ids=pass_ids)
-plate = mp.transform_exp_values(plate, offset=1.0, transformation="log2", threshold_lower=1.0)
+# Results stay with the AnnData object.
+adata.uns["marvel"]["tables"]["psi"]["SE"]
+adata.obsm["X_marvel_psi_se"]
 
-g1 = plate.get_sample_ids("cell.type", ["iPSC"])
-g2 = plate.get_sample_ids("cell.type", ["Endoderm"])
-plate = mp.compare_values(plate, cell_group_g1=g1, cell_group_g2=g2, level="gene", method="wilcox")
+pass_ids = adata.obs.loc[adata.obs["qc.seq"] == "pass", "sample.id"]
+adata = mp.subset_samples(adata, sample_ids=pass_ids.tolist())
+adata = mp.transform_exp_values(adata, offset=1.0, transformation="log2", threshold_lower=1.0)
+
+g1 = adata.obs.loc[adata.obs["cell.type"] == "iPSC", "sample.id"].tolist()
+g2 = adata.obs.loc[adata.obs["cell.type"] == "Endoderm", "sample.id"].tolist()
+adata = mp.compare_values(adata, cell_group_g1=g1, cell_group_g2=g2, level="gene", method="wilcox")
 ```
 
-### 10x droplet workflow
+The old function names are AnnData-aware. Passing a `MarvelPlate` / `Marvel10x` object preserves the legacy behavior; passing an `AnnData` object updates that `AnnData` in place and returns it.
+
+### AnnData-native 10x droplet workflow
 
 ```python
 import marvel_py as mp
 
-marvel = mp.create_marvel_object_10x(
+adata = mp.setup_10x_anndata(
     gene_norm_matrix="gene_norm_matrix.mtx",
     gene_norm_pheno="gene_norm_pheno.tsv",
     gene_norm_feature="gene_norm_feature.tsv",
@@ -81,20 +87,26 @@ marvel = mp.create_marvel_object_10x(
     gtf="annotation.gtf",
 )
 
-marvel = mp.annotate_genes_10x(marvel)
-marvel = mp.annotate_sj_10x(marvel)
-marvel = mp.validate_sj_10x(marvel)
-marvel = mp.filter_genes_10x(marvel)
-marvel = mp.check_alignment_10x(marvel)
+# Large 10x Matrix Market inputs are lazy by default. Pass
+# load_matrices=True when you want matrices loaded into adata.X/layers
+# during setup instead of during MARVEL processing.
+adata = mp.annotate_genes_10x(adata)
+adata = mp.annotate_sj_10x(adata)
+adata = mp.validate_sj_10x(adata)
+adata = mp.filter_genes_10x(adata)
+adata = mp.check_alignment_10x(adata)
 
-g1, g2 = marvel.get_cell_groups("cell.type", "iPSC", "Cardio day 10")
-marvel = mp.plot_pct_expr_cells_genes_10x(marvel, cell_group_g1=g1, cell_group_g2=g2)
-marvel = mp.plot_pct_expr_cells_sj_10x(marvel, cell_group_g1=g1, cell_group_g2=g2)
-marvel = mp.compare_values_sj_10x(marvel, cell_group_g1=g1, cell_group_g2=g2, n_iterations=10)
-marvel = mp.compare_values_genes_10x(marvel)
+g1 = adata.obs.loc[adata.obs["cell.type"] == "iPSC", "sample.id"].tolist()
+g2 = adata.obs.loc[adata.obs["cell.type"] == "Cardio day 10", "sample.id"].tolist()
+adata = mp.plot_pct_expr_cells_genes_10x(adata, cell_group_g1=g1, cell_group_g2=g2)
+adata = mp.plot_pct_expr_cells_sj_10x(adata, cell_group_g1=g1, cell_group_g2=g2)
+adata = mp.compare_values_sj_10x(adata, cell_group_g1=g1, cell_group_g2=g2, n_iterations=10)
+adata = mp.compare_values_genes_10x(adata)
 ```
 
-Both object-oriented helpers (`MarvelPlate`, `Marvel10x`) and module-level functions are supported. The preferred public API is `import marvel_py as mp` followed by `mp.function(...)`; the old nested `api` facade and legacy `py_marvel` mirror are not the supported interface.
+Tabular outputs are mirrored under `adata.uns["marvel"]["tables"]`, and plate PSI matrices are exposed in `adata.obsm`. A runtime backend object is cached internally so consecutive function calls on the same `AnnData` keep MARVEL state without placing a non-serializable object in `adata.uns`.
+
+Both AnnData function calls and low-level object helpers (`MarvelPlate`, `Marvel10x`) are supported. The preferred public API is `import marvel_py as mp` followed by AnnData setup plus the existing MARVEL function names; existing flat-file functions such as `mp.create_marvel_object(...)` and `mp.create_marvel_object_10x(...)` remain available for benchmarks and legacy scripts. The old nested `api` facade and legacy `py_marvel` mirror are not the supported interface.
 
 ---
 
@@ -167,10 +179,10 @@ To rerun the external benchmark and archive the results:
 # Optional: only needed when Rscript is not already on PATH.
 export MARVEL_RSCRIPT=/path/to/Rscript
 
-uv run --with matplotlib --with scikit-learn \
+uv run --with matplotlib \
   python benchmark/scripts/run_external_benchmark_archive.py
 
-uv run --with matplotlib --with scikit-learn \
+uv run --with matplotlib \
   python benchmark/scripts/plot_benchmark_summary_figure.py \
   --run-dir benchmark/runs/<run_id>
 ```

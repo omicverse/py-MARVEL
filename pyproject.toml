@@ -3,11 +3,11 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "marvel-py"
+name = "marvel-python"
 version = "0.1.0"
 description = "Pure-Python MARVEL workflows for plate- and droplet-based single-cell splicing analysis."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { file = "LICENSE" }
 keywords = ["single-cell", "splicing", "RNA-seq", "MARVEL", "plate", "10x"]
 classifiers = [
@@ -20,6 +20,7 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 dependencies = [
+  "anndata",
   "numpy",
   "pandas",
   "scikit-learn",

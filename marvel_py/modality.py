@@ -434,8 +434,14 @@ def _modality_change_inplace(
     return marvel_object
 
 
-def count_events(marvel_object: MarvelPlate, *, sample_ids: list[str], min_cells: int) -> MarvelPlate:
-    count_events_from_tables(marvel_object=marvel_object, sample_ids=sample_ids, min_cells=min_cells)
+def count_events(
+    marvel_object: MarvelPlate,
+    *,
+    sample_ids: list[str],
+    min_cells: int,
+    label: str | None = None,
+) -> MarvelPlate:
+    count_events_from_tables(marvel_object=marvel_object, sample_ids=sample_ids, min_cells=min_cells, label=label)
     return marvel_object
 
 
