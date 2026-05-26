@@ -1,0 +1,24 @@
+{
+  "phase": "plate_phase1",
+  "functions": ["CreateMarvelObject", "CheckAlignment", "SubsetSamples", "TransformExpValues", "ComputePSI", "ComputePSI.Posterior", "CountEvents", "AssignModality", "PropModality", "CompareValues"],
+  "inputs": ["inputs/exp.tsv", "inputs/gene_feature.tsv", "inputs/splice_feature_se.tsv", "inputs/splice_junction.tsv", "inputs/splice_pheno.tsv"],
+  "outputs": ["alignment_exp_subset_s1_s2.tsv", "alignment_splice_junction_s1_s2.tsv", "alignment_splice_pheno.tsv", "assign_modality_core.tsv", "compare_values_gene.tsv", "compute_psi_posterior_se.tsv", "compute_psi_se.tsv", "count_events_min1.tsv", "object_splice_feature_se.tsv", "object_splice_pheno.tsv"],
+  "comparison_status": {
+    "CreateMarvelObject": "exact",
+    "CheckAlignment": "exact",
+    "SubsetSamples": "exact",
+    "TransformExpValues": "exact",
+    "ComputePSI": "exact",
+    "ComputePSI.Posterior": "exact",
+    "CountEvents": "exact",
+    "AssignModality": "partial",
+    "PropModality": "partial",
+    "CompareValues": "partial"
+  },
+  "notes": {
+    "assign_modality": "Exported as stable scaffold columns only: tran_id,event_type,gene_id,gene_short_name,gene_type,n.cells.",
+    "prop_modality": "PropModality is not exported as an exact parity artifact on this tiny dataset because canonical R returns Missing/NA modality labels while Python computes concrete labels.",
+    "compare_values": "Only gene-level CompareValues exact parity is exported in Task 7 via compare_values_gene.tsv; the splicing branch remains contract-only coverage in Phase 1.",
+    "alignment": "R SubsetSamples trims SplicePheno but leaves Exp wider; alignment_exp_subset_s1_s2.tsv stores the stable gene_id,s1,s2 slice."
+  }
+}

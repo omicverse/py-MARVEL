@@ -1,0 +1,23 @@
+{
+  "phase": "phase3_plate",
+  "functions": ["RunPCA", "PlotValues", "PlotDEValues", "PropModality", "ModalityChange", "IsoSwitch", "IsoSwitch.PlotExpr"],
+  "outputs": ["run_pca_gene_coords.tsv", "run_pca_gene_explained.tsv", "run_pca_splicing_coords.tsv", "run_pca_splicing_explained.tsv", "plot_values_gene.tsv", "plot_de_gene_global.tsv", "prop_modality.tsv", "modality_change.tsv", "iso_switch.tsv", "iso_switch_plot_expr.tsv"],
+  "comparison_status": {
+    "RunPCA": "exact",
+    "PlotValues": "exact",
+    "PlotDEValues": "exact",
+    "PropModality": "partial",
+    "ModalityChange": "partial",
+    "IsoSwitch": "partial",
+    "IsoSwitch.PlotExpr": "partial"
+  },
+  "notes": {
+    "RunPCA": "Shared plate inputs are exported as gene-level and splicing-level PCA coordinates and explained variance. Exact explained-variance parity is expected; coordinate sign can flip per component.",
+    "PlotValues": "Exact parity is exported as a stable tidy value table for level='gene'.",
+    "PlotDEValues": "Exact parity is exported as the labeled gene.global DE table.",
+    "PropModality": "Tiny shared inputs produce R Missing/NA modality labels while Python computes concrete labels; the committed reference captures the upstream R table for audit.",
+    "ModalityChange": "Exported from marvel.demo.rds because the tiny shared fixture does not carry rich differential splicing state.",
+    "IsoSwitch": "Exported from marvel.demo.rds because iso-switch classification depends on richer DE state than the tiny shared fixture.",
+    "IsoSwitch.PlotExpr": "Stored as the stable plotting table derived from the upstream IsoSwitch raw table."
+  }
+}

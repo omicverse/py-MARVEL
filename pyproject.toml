@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "marvel-python"
-version = "0.1.0"
+version = "0.1.1"
 description = "Pure-Python MARVEL workflows for plate- and droplet-based single-cell splicing analysis."
 readme = "README.md"
 requires-python = ">=3.10"
